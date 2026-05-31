@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bible Tracker - Suivi de Lecture Épuré & Premium</title>
+  <meta name="description" content="Une application moderne et raffinée pour suivre votre lecture de la Bible, gérer vos objectifs quotidiens et rédiger vos notes d'étude.">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- SheetJS (XLSX Reader) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  
+  <div class="app-container">
+    <!-- Header -->
+    <header>
+      <div class="logo-section">
+        <div class="logo-icon">
+          <i class="fa-solid fa-book-bible"></i>
+        </div>
+        <div>
+          <h1>Bible Tracker</h1>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <!-- Theme Toggle -->
+        <button class="theme-toggle" id="theme-toggle-btn" aria-label="Changer de thème">
+          <i class="fa-solid fa-moon" id="theme-icon"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Tabbed Navigation Menu -->
+    <nav class="tabs-navigation" aria-label="Menu principal">
+      <button class="tab-btn active" data-tab="dashboard-tab">
+        <i class="fa-solid fa-chart-line"></i> Tableau de Bord
+      </button>
+      <button class="tab-btn" data-tab="reading-list-tab">
+        <i class="fa-solid fa-list-check"></i> Liste des Lectures
+      </button>
+      <button class="tab-btn" data-tab="notes-tab">
+        <i class="fa-solid fa-pen-nib"></i> Mes Notes
+      </button>
+    </nav>
+
+    <!-- TAB 1: Tableau de bord -->
+    <section id="dashboard-tab" class="tab-content active">
+      <div class="dashboard-grid">
+        
+        <!-- Stat Card 1: Chapitres lus -->
+        <div class="card stat-card stat-card-1">
+          <div class="stat-icon blue">
+            <i class="fa-solid fa-book-open"></i>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value" id="stat-chapters-ratio">0 / 1189</span>
+            <span class="stat-label">Chapitres lus</span>
+          </div>
+        </div>
+
+        <!-- Stat Card 2: Livres complétés -->
+        <div class="card stat-card stat-card-2">
+          <div class="stat-icon amber">
+            <i class="fa-solid fa-circle-check"></i>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value" id="stat-books-ratio">0 / 66</span>
+            <span class="stat-label">Livres complétés</span>
+          </div>
+        </div>
+
+        <!-- Stat Card 3: Ancien Testament -->
+        <div class="card stat-card stat-card-3">
+          <div class="stat-icon emerald">
+            <i class="fa-solid fa-scroll"></i>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value" id="stat-ot-ratio">0 / 39</span>
+            <span class="stat-label">Livres AT lus</span>
+          </div>
+        </div>
+
+        <!-- Stat Card 4: Nouveau Testament -->
+        <div class="card stat-card stat-card-4">
+          <div class="stat-icon indigo">
+            <i class="fa-solid fa-cross"></i>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value" id="stat-nt-ratio">0 / 27</span>
+            <span class="stat-label">Livres NT lus</span>
+          </div>
+        </div>
+
+        <!-- Progress Card (Circular Indicator) -->
+        <div class="card prog-card">
+          <div class="prog-circle-container">
+            <svg class="prog-circle-svg">
+              <!-- Definitions for SVG gradients -->
+              <defs>
+                <linearGradient id="gradCircle" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#6366f1" />
+                  <stop offset="100%" stop-color="#a855f7" />
+                </linearGradient>
+              </defs>
+              <circle class="circle-bg" cx="80" cy="80" r="70"></circle>
+              <circle class="circle-fill" id="circular-progress-bar" cx="80" cy="80" r="70"></circle>
+            </svg>
+            <div class="prog-text-center">
+              <span class="prog-percentage" id="progress-percentage-val">0%</span>
+              <span class="prog-lbl">Global</span>
+            </div>
+          </div>
+          <h3 style="font-weight: 700; margin-bottom: 0.5rem;">Votre Progression</h3>
+          <p style="color: var(--text-secondary); font-size: 0.85rem;" id="progress-summary-txt">Commencez à lire pour voir votre évolution.</p>
+        </div>
+
+        <!-- Chart Card (History of reading) -->
+        <div class="card chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Activité de Lecture</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Derniers 7 jours</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="readingHistoryChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Breakdown Details Card -->
+        <div class="card details-card">
+          <div class="card-header">
+            <h3 class="card-title">
+              <i class="fa-solid fa-chart-pie" style="color: var(--color-primary)"></i> Analyse par Testament
+            </h3>
+          </div>
+          <div class="details-grid">
+            <!-- Ancien Testament -->
+            <div class="testament-panel">
+              <div class="panel-header">
+                <span>Ancien Testament</span>
+                <span id="ot-pct-val">0%</span>
+              </div>
+              <div class="panel-progress-bar">
+                <div class="panel-progress-fill" id="ot-progress-fill"></div>
+              </div>
+              <div class="panel-data-row">
+                <span class="panel-data-label">Chapitres lus</span>
+                <span class="panel-data-value" id="ot-chapters-data">0 / 929</span>
+              </div>
+              <div class="panel-data-row">
+                <span class="panel-data-label">Livres restants</span>
+                <span class="panel-data-value" id="ot-books-remaining">39 livres</span>
+              </div>
+            </div>
+
+            <!-- Nouveau Testament -->
+            <div class="testament-panel">
+              <div class="panel-header">
+                <span>Nouveau Testament</span>
+                <span id="nt-pct-val">0%</span>
+              </div>
+              <div class="panel-progress-bar">
+                <div class="panel-progress-fill" id="nt-progress-fill"></div>
+              </div>
+              <div class="panel-data-row">
+                <span class="panel-data-label">Chapitres lus</span>
+                <span class="panel-data-value" id="nt-chapters-data">0 / 260</span>
+              </div>
+              <div class="panel-data-row">
+                <span class="panel-data-label">Livres restants</span>
+                <span class="panel-data-value" id="nt-books-remaining">27 livres</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+      </div>
+    </section>
+
+    <!-- TAB 2: Liste des Lectures -->
+    <section id="reading-list-tab" class="tab-content">
+      
+      <!-- Goal configuration widget -->
+      <div class="goal-config-card">
+        <div class="goal-info">
+          <i class="fa-solid fa-bullseye"></i>
+          <div class="goal-text">
+            <h3>Objectif Quotidien</h3>
+            <p>Déterminez le nombre de chapitres à lire chaque jour pour mettre à jour votre plan.</p>
+          </div>
+        </div>
+        <div class="goal-input-control">
+          <button id="goal-minus-btn" aria-label="Diminuer l'objectif"><i class="fa-solid fa-minus"></i></button>
+          <input type="number" id="daily-goal-input" value="3" min="1" max="150" aria-label="Nombre de chapitres quotidien">
+          <button id="goal-plus-btn" aria-label="Augmenter l'objectif"><i class="fa-solid fa-plus"></i></button>
+          <span style="font-weight: 600; font-size: 0.9rem; margin-left: 0.5rem;">chapitres / jour</span>
+        </div>
+      </div>
+
+      <!-- Controls: Filters and Search -->
+      <div class="reading-list-controls">
+        <div class="search-input-wrapper">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="book-search-input" class="search-input" placeholder="Rechercher un livre (ex: Genèse, Jean...)">
+        </div>
+        <div class="filter-select-wrapper">
+          <button class="filter-btn active" data-filter="all">Tous</button>
+          <button class="filter-btn" data-filter="today">À lire aujourd'hui</button>
+          <button class="filter-btn" data-filter="unread">À lire</button>
+          <button class="filter-btn" data-filter="read">Lus</button>
+        </div>
+      </div>
+
+      <!-- Container of Books To Do List -->
+      <div class="todo-list-container" id="books-list-container">
+        <!-- Will be dynamically populated by Javascript -->
+      </div>
+      
+      <!-- Pagination Controls -->
+      <div class="pagination-controls" id="pagination-container">
+        <!-- Will be dynamically populated by Javascript -->
+      </div>
+    </section>
+
+    <!-- TAB 3: Mes Notes -->
+    <section id="notes-tab" class="tab-content">
+      <div class="notes-container">
+        
+        <!-- Sidebar: Notes list -->
+        <div class="notes-sidebar">
+          <button class="btn" id="new-note-btn">
+            <i class="fa-solid fa-plus"></i> Nouvelle Note
+          </button>
+          
+          <div class="notes-search-wrapper">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="notes-search-input" class="notes-search" placeholder="Rechercher dans vos notes...">
+          </div>
+          
+          <div class="notes-list" id="notes-list-items">
+            <!-- Will be populated dynamically by Javascript -->
+          </div>
+        </div>
+
+        <!-- Main workspace: Note Editor -->
+        <div class="notes-workspace">
+          <div class="card note-editor-card">
+            <div class="notes-editor-header">
+              <h3 class="card-title" id="editor-action-title">Écrire une Note</h3>
+              <div class="editor-actions-top">
+                <!-- Delete button shows only for existing notes -->
+                <button class="btn btn-secondary btn-danger" id="delete-note-btn" style="display: none;">
+                  <i class="fa-solid fa-trash-can"></i> Supprimer
+                </button>
+              </div>
+            </div>
+            
+            <div class="editor-row-fields">
+              <div class="editor-field">
+                <label for="note-title-input">Titre de la note</label>
+                <input type="text" id="note-title-input" class="editor-input" placeholder="Titre (ex: Étude de Genèse 1...)">
+              </div>
+              <div class="editor-field">
+                <label for="note-book-select">Référence du Livre</label>
+                <select id="note-book-select" class="editor-select">
+                  <option value="">Général / Aucun</option>
+                  <!-- Will be filled dynamically by Javascript -->
+                </select>
+              </div>
+            </div>
+            
+            <div class="editor-field">
+              <label for="note-content-textarea">Contenu de vos réflexions</label>
+              <textarea id="note-content-textarea" class="editor-textarea" placeholder="Rédigez ici vos versets clés, pensées, révélations ou questions du jour..."></textarea>
+            </div>
+            
+            <div class="editor-actions">
+              <button class="btn btn-secondary" id="cancel-note-btn">Réinitialiser</button>
+              <button class="btn" id="save-note-btn">
+                <i class="fa-solid fa-floppy-disk"></i> Enregistrer la Note
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <p>Bible Tracker &copy; 2026 - Un compagnon épuré pour votre voyage à travers les Écritures.</p>
+    </footer>
+  </div>
+
+  <!-- Javascript Modules -->
+  <script src="bibleData.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
