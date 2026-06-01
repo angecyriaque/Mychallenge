@@ -29,6 +29,18 @@
       </div>
       
       <div class="header-actions">
+        <!-- Profile Switcher Dropdown Widget -->
+        <div class="profile-dropdown-wrapper">
+          <button class="profile-select-btn" id="active-profile-btn">
+            <span class="avatar-circle" id="header-avatar" style="background-color: var(--color-primary)">U</span>
+            <span class="profile-name-txt" id="header-username">Utilisateur</span>
+            <i class="fa-solid fa-caret-down"></i>
+          </button>
+          <div class="profile-dropdown-menu" id="profile-dropdown-list">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+        
         <!-- Theme Toggle -->
         <button class="theme-toggle" id="theme-toggle-btn" aria-label="Changer de thème">
           <i class="fa-solid fa-moon" id="theme-icon"></i>
@@ -178,6 +190,18 @@
             </div>
           </div>
         </div>
+
+        <!-- Companions progress card -->
+        <div class="card companions-card" style="grid-column: 1 / -1;">
+          <div class="card-header">
+            <h3 class="card-title">
+              <i class="fa-solid fa-users" style="color: var(--color-accent)"></i> Compagnons de Lecture (Progression)
+            </h3>
+          </div>
+          <div class="companions-grid" id="companions-list-container">
+            <!-- Will be dynamically populated by Javascript -->
+          </div>
+        </div>
         
       </div>
     </section>
@@ -216,9 +240,26 @@
         </div>
       </div>
 
-      <!-- Container of Books To Do List -->
-      <div class="todo-list-container" id="books-list-container">
-        <!-- Will be dynamically populated by Javascript -->
+      <!-- Today's Readings Grid -->
+      <div id="today-readings-section" style="margin-bottom: 2.5rem; display: none;">
+        <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; justify-content: space-between;">
+          <span style="display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fa-solid fa-calendar-day" style="color: var(--color-accent)"></i> Lectures Recommandées du Jour
+          </span>
+          <span style="font-size: 0.85rem; color: var(--text-secondary); background: rgba(245, 158, 11, 0.15); padding: 0.2rem 0.6rem; border-radius: 6px;" id="today-progress-ratio">0 / 3 chapitres</span>
+        </h3>
+        <div class="today-cubes-grid" id="today-cubes-list">
+          <!-- Will be dynamically populated with compact chapter cubes -->
+        </div>
+      </div>
+
+      <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 1rem;">
+        <i class="fa-solid fa-layer-group" style="color: var(--color-primary)"></i> Livres de la Bible
+      </h3>
+      
+      <!-- Container of Books Grid -->
+      <div class="books-cubes-grid" id="books-list-container">
+        <!-- Will be dynamically populated with compact book cards (cubes) -->
       </div>
       
       <!-- Pagination Controls -->
@@ -295,6 +336,54 @@
     <footer>
       <p>Bible Tracker &copy; 2026 - Un compagnon épuré pour votre voyage à travers les Écritures.</p>
     </footer>
+  </div>
+
+  <!-- Modale de Création de Profil -->
+  <div class="modal-overlay" id="profile-modal">
+    <div class="card modal-content">
+      <h3 class="card-title" style="margin-bottom: 1rem;">
+        <i class="fa-solid fa-user-plus" style="color: var(--color-primary)"></i> Nouveau Profil
+      </h3>
+      <div class="editor-field" style="margin-bottom: 1.25rem;">
+        <label for="new-profile-username">Pseudo de l'utilisateur</label>
+        <input type="text" id="new-profile-username" class="editor-input" placeholder="Ex: Jean, Marie, Pierre...">
+      </div>
+      <div class="editor-field" style="margin-bottom: 1.5rem;">
+        <label>Couleur du profil</label>
+        <div class="avatar-color-picker" id="modal-color-picker">
+          <div class="color-dot active" style="background-color: #6366f1" data-color="#6366f1"></div>
+          <div class="color-dot" style="background-color: #10b981" data-color="#10b981"></div>
+          <div class="color-dot" style="background-color: #f59e0b" data-color="#f59e0b"></div>
+          <div class="color-dot" style="background-color: #ef4444" data-color="#ef4444"></div>
+          <div class="color-dot" style="background-color: #ec4899" data-color="#ec4899"></div>
+          <div class="color-dot" style="background-color: #06b6d4" data-color="#06b6d4"></div>
+        </div>
+      </div>
+      <div class="editor-actions">
+        <button class="btn btn-secondary" id="close-profile-modal-btn">Annuler</button>
+        <button class="btn" id="save-profile-btn">Créer le Profil</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tiroir Latéral / Drawer des Chapitres -->
+  <div class="drawer-overlay" id="chapters-drawer">
+    <div class="drawer-content">
+      <div class="drawer-header">
+        <div style="display: flex; flex-direction: column; text-align: left;">
+          <h3 id="drawer-book-title" style="font-size: 1.3rem; font-weight: 800;">Livre</h3>
+          <span id="drawer-book-progress" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">0 / 0 chapitres lus</span>
+        </div>
+        <button class="drawer-close-btn" id="close-drawer-btn" aria-label="Fermer">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="drawer-body">
+        <div class="drawer-chapters-grid" id="drawer-chapters-list">
+          <!-- Grille de chapitres cubes -->
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Javascript Modules -->

@@ -2,24 +2,101 @@
 
 // --- GESTION DE L'ÉTAT LOCAL (STATE) ---
 let state = {
-  bibleChapters: [], // Chargé depuis Excel ou local: [{ id, book, bookId, chapter, ref, testament }]
-  readChapters: [],  // Tableau de chaînes 'bookId-chapterNumber' (ex: 'genese-1')
-  dailyGoal: 3,      // Objectif de lecture par jour
-  notes: [],         // Tableau d'objets { id, title, bookId, content, date }
-  historyLog: {},    // { 'YYYY-MM-DD': nombre_de_chapitres_lus_ce_jour }
-  currentNoteId: null, // ID de la note en cours d'édition (null si nouvelle note)
+  bibleChapters: [],    // Chargé depuis Excel ou local: [{ id, book, bookId, chapter, ref, testament }]
+  profiles: [],         // [{ id, username, avatarColor, readChapters, dailyGoal, notes, historyLog, todaysPlan, todaysPlanDate }]
+  currentProfileId: null,
+  
+  // Variables simplifiées pointant sur le profil actif (pour compatibilité)
+  readChapters: [],
+  dailyGoal: 3,
+  notes: [],
+  historyLog: {},
+
   activeTab: 'dashboard-tab',
   currentTheme: 'dark',
   
-  // Pagination pour la To-Do list
+  // Pagination pour les livres
   currentPage: 1,
-  itemsPerPage: 50
+  itemsPerPage: 18 // Livres par page en format cubes compacts
 };
 
-// Éléments DOM Globaux
+// Variables globales de contrôle
 let readingChart = null;
+let currentDrawerBookId = null;
 
-// Livres de l'Ancien Testament pour trier
+// Association d'icônes symboliques pour chaque livre de la Bible (design épuré)
+const BOOK_ICONS = {
+  // Ancien Testament
+  genese: 'fa-seedling',        // Création / Commencement
+  exode: 'fa-water',           // Traversée de la Mer Rouge
+  levitique: 'fa-fire-burner',  // Lois de sacrifice / Altar
+  nombres: 'fa-list-ol',        // Dénombrement du peuple
+  deuteronome: 'fa-book-open-reader', // Seconde loi donnée
+  josue: 'fa-mountain',         // Conquête de Canaan / Murs de Jéricho
+  juges: 'fa-gavel',            // Juges d'Israël
+  ruth: 'fa-wheat-awn',         // Glanage de Ruth
+  '1samuel': 'fa-crown',        // Royauté de David
+  '2samuel': 'fa-crown',
+  '1rois': 'fa-crown',
+  '2rois': 'fa-crown',
+  '1chroniques': 'fa-scroll',   // Chroniques historiques
+  '2chroniques': 'fa-scroll',
+  esdras: 'fa-scroll',          // Reconstruction du temple
+  nehemie: 'fa-trowel-bricks',  // Reconstruction de la muraille
+  esther: 'fa-gem',             // Reine Esther / Sceptre d'or
+  job: 'fa-wind',               // Souffle de l'épreuve
+  psaumes: 'fa-music',          // Louange / Harpe
+  proverbes: 'fa-brain',        // Sagesse de Salomon
+  ecclesiaste: 'fa-brain',
+  cantique: 'fa-heart',         // Amour spirituel
+  esaie: 'fa-bullhorn',         // Prophétie / Messie
+  jeremie: 'fa-bullhorn',
+  lamentations: 'fa-droplet',   // Pleurs de Jérémie
+  ezechiel: 'fa-eye',           // Visions prophétiques
+  daniel: 'fa-hourglass-half',  // Rêves et époques / Fosse aux lions
+  osee: 'fa-bullhorn',
+  joel: 'fa-bullhorn',
+  amos: 'fa-bullhorn',
+  abdias: 'fa-bullhorn',
+  jonas: 'fa-fish',             // Jonas et le grand poisson
+  michee: 'fa-bullhorn',
+  nahum: 'fa-bullhorn',
+  habacuc: 'fa-bullhorn',
+  sophonie: 'fa-bullhorn',
+  aggee: 'fa-bullhorn',
+  zacharie: 'fa-bullhorn',
+  malachie: 'fa-bullhorn',
+  // Nouveau Testament
+  matthieu: 'fa-cross',         // Évangile de Jésus
+  marc: 'fa-cross',
+  luc: 'fa-cross',
+  jean: 'fa-cross',
+  actes: 'fa-fire',             // Pentecôte / Saint-Esprit
+  romains: 'fa-envelope-open-text', // Épîtres de Paul
+  '1corinthiens': 'fa-envelope-open-text',
+  '2corinthiens': 'fa-envelope-open-text',
+  galates: 'fa-envelope-open-text',
+  ephesiens: 'fa-envelope-open-text',
+  philippiens: 'fa-envelope-open-text',
+  colossiens: 'fa-envelope-open-text',
+  '1thessaloniciens': 'fa-envelope-open-text',
+  '2thessaloniciens': 'fa-envelope-open-text',
+  '1timothee': 'fa-envelope-open-text',
+  '2timothee': 'fa-envelope-open-text',
+  tite: 'fa-envelope-open-text',
+  philemon: 'fa-envelope-open-text',
+  hebreux: 'fa-envelope-open-text',
+  jacques: 'fa-envelope-open-text',
+  '1pierre': 'fa-envelope-open-text',
+  '2pierre': 'fa-envelope-open-text',
+  '1jean': 'fa-envelope-open-text',
+  '2jean': 'fa-envelope-open-text',
+  '3jean': 'fa-envelope-open-text',
+  jude: 'fa-envelope-open-text',
+  apocalypse: 'fa-meteor'       // Révélation de la fin des temps
+};
+
+// Livres de l'Ancien Testament
 const OT_BOOKS = [
   "Genèse", "Exode", "Lévitique", "Nombres", "Deutéronome", "Josué", "Juges", "Ruth",
   "1 Samuel", "2 Samuel", "1 Rois", "2 Rois", "1 Chroniques", "2 Chroniques", "Esdras",
@@ -30,33 +107,33 @@ const OT_BOOKS = [
 
 // --- INITIALISATION DE L'APPLICATION ---
 document.addEventListener('DOMContentLoaded', async () => {
+  await initBibleData();
   loadLocalStorage();
   initTheme();
   initTabNavigation();
   initGoalControls();
-  
-  // Charger les données de la Bible (Excel ou secours)
-  await initBibleData();
+  initProfilesUI();
   
   populateBookSelect();
   renderReadingList();
   renderNotesList();
   updateDashboard();
   initNotesControls();
+  initDrawerControls();
   
   // Ecouteurs sur les filtres de la liste de lecture
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
       e.currentTarget.classList.add('active');
-      state.currentPage = 1; // Reset pagination
+      state.currentPage = 1;
       renderReadingList();
     });
   });
 
   // Écouteur sur la recherche de livre
   document.getElementById('book-search-input').addEventListener('input', () => {
-    state.currentPage = 1; // Reset pagination
+    state.currentPage = 1;
     renderReadingList();
   });
 });
@@ -67,7 +144,7 @@ async function initBibleData() {
     const response = await fetch('/liste_chapitres_bible.xlsx');
     if (!response.ok) throw new Error("Fichier introuvable.");
     
-    const arrayBuffer = await response.buffer ? await response.buffer() : await response.arrayBuffer();
+    const arrayBuffer = await response.arrayBuffer();
     const data = new Uint8Array(arrayBuffer);
     const workbook = XLSX.read(data, { type: 'array' });
     const firstSheetName = workbook.SheetNames[0];
@@ -112,103 +189,231 @@ async function initBibleData() {
   }
 }
 
-// Helper pour déterminer le testament
+// Helpers
 function getTestamentByBookName(bookName) {
   return OT_BOOKS.includes(bookName) ? 'Ancien' : 'Nouveau';
 }
 
-// Helper pour formater l'identifiant (slugify)
 function slugify(text) {
   return text.toString().toLowerCase().trim()
-    .replace(/\s+/g, '')           // Enlever les espaces
-    .replace(/[éèêë]/g, 'e')       // Remplacer accents
+    .replace(/\s+/g, '')
+    .replace(/[éèêë]/g, 'e')
     .replace(/[àâä]/g, 'a')
     .replace(/[îï]/g, 'i')
     .replace(/[ôö]/g, 'o')
     .replace(/[ûü]/g, 'u')
     .replace(/[ç]/g, 'c')
-    .replace(/[^a-z0-9]/g, '');    // Retirer non-alphanumérique
+    .replace(/[^a-z0-9]/g, '');
 }
 
-// --- PERSISTANCE LOCAL STORAGE ---
+// --- GESTION DES PROFILS (MULTI-UTILISATEURS) ---
 function loadLocalStorage() {
-  const savedReadChapters = localStorage.getItem('bible_tracker_read_chapters');
-  if (savedReadChapters) {
-    state.readChapters = JSON.parse(savedReadChapters);
-  }
-
-  const savedDailyGoal = localStorage.getItem('bible_tracker_daily_goal');
-  if (savedDailyGoal) {
-    state.dailyGoal = parseInt(savedDailyGoal, 10);
-    document.getElementById('daily-goal-input').value = state.dailyGoal;
-  }
-
-  const savedNotes = localStorage.getItem('bible_tracker_notes');
-  if (savedNotes) {
-    state.notes = JSON.parse(savedNotes);
+  const savedProfiles = localStorage.getItem('bible_tracker_profiles');
+  const savedCurrentProfileId = localStorage.getItem('bible_tracker_current_profile_id');
+  
+  if (savedProfiles) {
+    state.profiles = JSON.parse(savedProfiles);
   } else {
-    state.notes = [
+    // Initialiser les profils d'exemple
+    state.profiles = [
       {
-        id: 'example-1',
-        title: 'Premières pensées sur la Création',
-        bookId: 'genese',
-        content: 'La Genèse pose les bases de notre foi. Le chapitre 1 révèle l\'ordre, la beauté et la puissance de la parole de Dieu. Tout ce qu\'Il crée est qualifié de "bon", puis "très bon" après la création de l\'homme. Cela montre la valeur infinie que nous avons à Ses yeux.',
-        date: getFormattedDate(new Date(Date.now() - 24 * 60 * 60 * 1000 * 2))
+        id: 'prof-1',
+        username: 'David',
+        avatarColor: '#6366f1',
+        readChapters: ['genese-1', 'genese-2', 'genese-3', 'jean-1'],
+        dailyGoal: 3,
+        notes: [
+          {
+            id: 'note-sample-1',
+            title: 'La Création - Jour 1',
+            bookId: 'genese',
+            content: 'Genèse 1 montre la grandeur de Dieu. Sa voix ordonne le chaos. Lumière et ténèbres sont séparées par simple commandement.',
+            date: getFormattedDate(new Date(Date.now() - 24*60*60*1000))
+          }
+        ],
+        historyLog: {},
+        todaysPlan: ['genese-4', 'genese-5', 'genese-6'],
+        todaysPlanDate: formatDateKey(new Date())
       },
       {
-        id: 'example-2',
-        title: 'La Grâce de l\'Évangile de Jean',
-        bookId: 'jean',
-        content: 'Jean 1:1-14 est un prologue magnifique. "Le Verbe s\'est fait chair." La divinité de Jésus combinée à Son humanité est le cœur de la foi chrétienne. Il apporte la grâce et la vérité.',
-        date: getFormattedDate(new Date())
+        id: 'prof-2',
+        username: 'Noémie',
+        avatarColor: '#10b981',
+        readChapters: ['jean-1', 'jean-2', 'jean-3'],
+        dailyGoal: 2,
+        notes: [],
+        historyLog: {},
+        todaysPlan: ['jean-4', 'jean-5'],
+        todaysPlanDate: formatDateKey(new Date())
       }
     ];
-    saveNotesToStorage();
+    saveProfilesToStorage();
   }
 
-  const savedHistoryLog = localStorage.getItem('bible_tracker_history');
-  if (savedHistoryLog) {
-    state.historyLog = JSON.parse(savedHistoryLog);
+  if (savedCurrentProfileId && state.profiles.some(p => p.id === savedCurrentProfileId)) {
+    state.currentProfileId = savedCurrentProfileId;
   } else {
-    if (state.readChapters.length > 0) {
-      seedHistoryLog();
-    } else {
-      state.historyLog = {};
-    }
-    saveHistoryToStorage();
+    state.currentProfileId = state.profiles[0].id;
+    localStorage.setItem('bible_tracker_current_profile_id', state.currentProfileId);
   }
+
+  loadActiveProfileState();
 }
 
-function saveReadChaptersToStorage() {
-  localStorage.setItem('bible_tracker_read_chapters', JSON.stringify(state.readChapters));
-}
+function loadActiveProfileState() {
+  const activeProfile = state.profiles.find(p => p.id === state.currentProfileId);
+  if (!activeProfile) return;
 
-function saveNotesToStorage() {
-  localStorage.setItem('bible_tracker_notes', JSON.stringify(state.notes));
-}
-
-function saveHistoryToStorage() {
-  localStorage.setItem('bible_tracker_history', JSON.stringify(state.historyLog));
-}
-
-function seedHistoryLog() {
-  const dates = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    dates.push(formatDateKey(d));
-  }
+  state.readChapters = activeProfile.readChapters || [];
+  state.dailyGoal = activeProfile.dailyGoal || 3;
+  state.notes = activeProfile.notes || [];
+  state.historyLog = activeProfile.historyLog || {};
   
-  let remaining = state.readChapters.length;
-  dates.forEach((dateKey, index) => {
-    if (index === dates.length - 1) {
-      state.historyLog[dateKey] = remaining;
-    } else {
-      const chunk = Math.min(remaining, Math.floor(Math.random() * 3));
-      state.historyLog[dateKey] = chunk;
-      remaining -= chunk;
-    }
+  document.getElementById('daily-goal-input').value = state.dailyGoal;
+  
+  updateActiveProfileHeader();
+}
+
+function saveActiveProfileState() {
+  const activeProfile = state.profiles.find(p => p.id === state.currentProfileId);
+  if (activeProfile) {
+    activeProfile.readChapters = state.readChapters;
+    activeProfile.dailyGoal = state.dailyGoal;
+    activeProfile.notes = state.notes;
+    activeProfile.historyLog = state.historyLog;
+  }
+  saveProfilesToStorage();
+}
+
+function saveProfilesToStorage() {
+  localStorage.setItem('bible_tracker_profiles', JSON.stringify(state.profiles));
+}
+
+function updateActiveProfileHeader() {
+  const activeProfile = state.profiles.find(p => p.id === state.currentProfileId);
+  if (!activeProfile) return;
+
+  const headerAvatar = document.getElementById('header-avatar');
+  const headerUsername = document.getElementById('header-username');
+  
+  headerAvatar.textContent = activeProfile.username.charAt(0);
+  headerAvatar.style.backgroundColor = activeProfile.avatarColor;
+  headerUsername.textContent = activeProfile.username;
+}
+
+function initProfilesUI() {
+  const activeProfileBtn = document.getElementById('active-profile-btn');
+  const dropdownList = document.getElementById('profile-dropdown-list');
+  const profileModal = document.getElementById('profile-modal');
+  const cancelModalBtn = document.getElementById('close-profile-modal-btn');
+  const saveProfileBtn = document.getElementById('save-profile-btn');
+  const newProfileUsername = document.getElementById('new-profile-username');
+  
+  // Sélection de couleur dans la modale
+  let selectedColor = '#6366f1';
+  document.querySelectorAll('#modal-color-picker .color-dot').forEach(dot => {
+    dot.addEventListener('click', (e) => {
+      document.querySelectorAll('#modal-color-picker .color-dot').forEach(d => d.classList.remove('active'));
+      e.currentTarget.classList.add('active');
+      selectedColor = e.currentTarget.getAttribute('data-color');
+    });
   });
+
+  // Toggle Dropdown
+  activeProfileBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdownList.classList.toggle('active');
+    populateProfileDropdown();
+  });
+
+  // Fermer le dropdown en cliquant à côté
+  document.addEventListener('click', () => {
+    dropdownList.classList.remove('active');
+  });
+
+  // Fermer la modale
+  cancelModalBtn.addEventListener('click', () => {
+    profileModal.classList.remove('active');
+  });
+
+  // Sauvegarder le nouveau profil
+  saveProfileBtn.addEventListener('click', () => {
+    const username = newProfileUsername.value.trim();
+    if (!username) {
+      alert("Veuillez saisir un pseudo.");
+      return;
+    }
+
+    const newProfile = {
+      id: 'prof-' + Date.now(),
+      username: username,
+      avatarColor: selectedColor,
+      readChapters: [],
+      dailyGoal: 3,
+      notes: [],
+      historyLog: {},
+      todaysPlan: [],
+      todaysPlanDate: ''
+    };
+
+    state.profiles.push(newProfile);
+    saveProfilesToStorage();
+    
+    // Switch sur ce nouveau profil
+    profileModal.classList.remove('active');
+    newProfileUsername.value = '';
+    switchProfile(newProfile.id);
+  });
+}
+
+function populateProfileDropdown() {
+  const dropdownList = document.getElementById('profile-dropdown-list');
+  dropdownList.innerHTML = '';
+
+  state.profiles.forEach(p => {
+    const item = document.createElement('button');
+    item.className = 'profile-dropdown-item';
+    if (p.id === state.currentProfileId) {
+      item.classList.add('active-item');
+    }
+
+    item.innerHTML = `
+      <span class="avatar-circle" style="background-color: ${p.avatarColor}">${p.username.charAt(0)}</span>
+      <span>${p.username}</span>
+    `;
+
+    item.addEventListener('click', () => {
+      switchProfile(p.id);
+    });
+
+    dropdownList.appendChild(item);
+  });
+
+  // Option d'ajout de profil
+  const addBtn = document.createElement('button');
+  addBtn.className = 'profile-dropdown-item add-profile-btn';
+  addBtn.innerHTML = `
+    <i class="fa-solid fa-user-plus"></i>
+    <span>Créer un profil</span>
+  `;
+
+  addBtn.addEventListener('click', () => {
+    document.getElementById('profile-modal').classList.add('active');
+  });
+
+  dropdownList.appendChild(addBtn);
+}
+
+function switchProfile(profileId) {
+  saveActiveProfileState();
+  state.currentProfileId = profileId;
+  localStorage.setItem('bible_tracker_current_profile_id', profileId);
+  loadActiveProfileState();
+
+  updateDashboard();
+  renderReadingList();
+  renderNotesList();
+  resetNoteForm();
 }
 
 // --- THÈME CLAIR/SOMBRE ---
@@ -225,7 +430,6 @@ function initTheme() {
     state.currentTheme = newTheme;
     document.documentElement.setAttribute('data-theme', newTheme);
     localStorage.setItem('bible_tracker_theme', newTheme);
-    
     themeIcon.className = newTheme === 'light' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
     
     if (readingChart) {
@@ -234,7 +438,7 @@ function initTheme() {
   });
 }
 
-// --- NAVIGATION PAR ONGLETS ---
+// --- NAVIGATION ---
 function initTabNavigation() {
   const tabs = document.querySelectorAll('.tab-btn');
   tabs.forEach(tab => {
@@ -260,7 +464,7 @@ function initTabNavigation() {
   });
 }
 
-// --- OBJECTIF QUOTIDIEN ---
+// --- RÉGLAGE DE L'OBJECTIF QUOTIDIEN ---
 function initGoalControls() {
   const input = document.getElementById('daily-goal-input');
   const minusBtn = document.getElementById('goal-minus-btn');
@@ -271,7 +475,15 @@ function initGoalControls() {
     if (newVal > 150) newVal = 150;
     state.dailyGoal = newVal;
     input.value = newVal;
-    localStorage.setItem('bible_tracker_daily_goal', newVal);
+    
+    // Forcer la régénération du plan du jour
+    const activeProfile = state.profiles.find(p => p.id === state.currentProfileId);
+    if (activeProfile) {
+      activeProfile.todaysPlan = [];
+      activeProfile.todaysPlanDate = '';
+    }
+    
+    saveActiveProfileState();
     renderReadingList();
     updateDashboard();
   };
@@ -304,8 +516,21 @@ function populateBookSelect() {
   });
 }
 
-// --- OBTENIR LE PLAN DE LECTURE DU JOUR ---
+// --- PLAN DE LECTURE DU JOUR FIXE (SANS GLISSEMENT DYNAMIQUE) ---
 function getTodaysReadingPlan() {
+  const activeProfile = state.profiles.find(p => p.id === state.currentProfileId);
+  if (!activeProfile) return [];
+
+  const todayKey = formatDateKey(new Date());
+
+  // Si le plan a déjà été généré aujourd'hui pour la taille souhaitée, on le fige
+  if (activeProfile.todaysPlanDate === todayKey && activeProfile.todaysPlan && activeProfile.todaysPlan.length > 0) {
+    if (activeProfile.todaysPlan.length === state.dailyGoal) {
+      return activeProfile.todaysPlan;
+    }
+  }
+
+  // Sinon, on le génère à partir des premiers chapitres non lus
   const plan = [];
   let count = 0;
   
@@ -314,159 +539,333 @@ function getTodaysReadingPlan() {
       plan.push(ch.id);
       count++;
       if (count >= state.dailyGoal) {
-        return plan;
+        break;
       }
     }
   }
+  
+  activeProfile.todaysPlan = plan;
+  activeProfile.todaysPlanDate = todayKey;
+  saveProfilesToStorage();
+
   return plan;
 }
 
-// --- RENDU DE LA LISTE DE LECTURE (CHECKLIST / TO-DO) ---
-function renderReadingList() {
-  const container = document.getElementById('books-list-container');
-  const paginationContainer = document.getElementById('pagination-container');
-  const searchQuery = document.getElementById('book-search-input').value.toLowerCase().trim();
-  const activeFilter = document.querySelector('.filter-btn.active').getAttribute('data-filter');
-  
-  container.innerHTML = '';
-  paginationContainer.innerHTML = '';
-  
-  const todaysPlan = getTodaysReadingPlan();
-  
-  // 1. Filtrer les chapitres
-  const filteredChapters = state.bibleChapters.filter(ch => {
-    const matchesSearch = ch.ref.toLowerCase().includes(searchQuery) || ch.book.toLowerCase().includes(searchQuery);
-    if (!matchesSearch) return false;
-    
-    const isRead = state.readChapters.includes(ch.id);
-    if (activeFilter === 'read') return isRead;
-    if (activeFilter === 'unread') return !isRead;
-    if (activeFilter === 'today') return todaysPlan.includes(ch.id);
-    
-    return true;
+// --- TIROIR LATÉRAL DES CHAPITRES (DRAWER) ---
+function initDrawerControls() {
+  const closeBtn = document.getElementById('close-drawer-btn');
+  const drawerOverlay = document.getElementById('chapters-drawer');
+
+  closeBtn.addEventListener('click', () => {
+    drawerOverlay.classList.remove('active');
+    currentDrawerBookId = null;
   });
 
-  if (filteredChapters.length === 0) {
-    container.innerHTML = `
-      <div class="card empty-state" style="grid-column: 1 / -1; width: 100%;">
-        <i class="fa-solid fa-magnifying-glass"></i>
-        <h3>Aucun chapitre trouvé</h3>
-        <p>Ajustez vos filtres ou la barre de recherche pour explorer la Bible.</p>
-      </div>
-    `;
-    return;
-  }
-
-  // 2. Pagination (sauf pour le filtre "Aujourd'hui")
-  let displayChapters = filteredChapters;
-  const isFilterToday = activeFilter === 'today';
-  
-  if (!isFilterToday) {
-    const totalItems = filteredChapters.length;
-    const totalPages = Math.ceil(totalItems / state.itemsPerPage);
-    
-    if (state.currentPage > totalPages) {
-      state.currentPage = 1;
+  // Fermer en cliquant sur l'overlay
+  drawerOverlay.addEventListener('click', (e) => {
+    if (e.target === drawerOverlay) {
+      drawerOverlay.classList.remove('active');
+      currentDrawerBookId = null;
     }
-    
-    const startIndex = (state.currentPage - 1) * state.itemsPerPage;
-    const endIndex = startIndex + state.itemsPerPage;
-    displayChapters = filteredChapters.slice(startIndex, endIndex);
-    
-    if (totalPages > 1) {
-      paginationContainer.innerHTML = `
-        <button class="pagination-btn" id="prev-page-btn" ${state.currentPage === 1 ? 'disabled' : ''}>
-          <i class="fa-solid fa-chevron-left"></i>
-        </button>
-        <span class="pagination-info">Page ${state.currentPage} sur ${totalPages} (${totalItems} chapitres)</span>
-        <button class="pagination-btn" id="next-page-btn" ${state.currentPage === totalPages ? 'disabled' : ''}>
-          <i class="fa-solid fa-chevron-right"></i>
-        </button>
-      `;
-      
-      document.getElementById('prev-page-btn').addEventListener('click', () => {
-        state.currentPage--;
-        renderReadingList();
-        container.scrollIntoView({ behavior: 'smooth' });
-      });
-      
-      document.getElementById('next-page-btn').addEventListener('click', () => {
-        state.currentPage++;
-        renderReadingList();
-        container.scrollIntoView({ behavior: 'smooth' });
-      });
-    }
-  }
-
-  // 3. Rendu des lignes To-Do
-  displayChapters.forEach(ch => {
-    const isRead = state.readChapters.includes(ch.id);
-    const isHighlighted = todaysPlan.includes(ch.id);
-    
-    const todoItem = document.createElement('div');
-    todoItem.className = 'todo-item';
-    if (isRead) todoItem.classList.add('checked');
-    if (isHighlighted && !isRead) todoItem.classList.add('highlighted');
-    
-    const badgeClass = ch.testament === 'Ancien' ? 'ot' : 'nt';
-    const badgeText = ch.testament === 'Ancien' ? 'AT' : 'NT';
-    
-    todoItem.innerHTML = `
-      <div class="todo-item-left">
-        <button class="todo-check-btn" aria-label="Marquer comme lu">
-          <i class="fa-solid fa-check"></i>
-        </button>
-        <span class="todo-ref">${ch.ref}</span>
-      </div>
-      <span class="todo-badge ${badgeClass}">${badgeText}</span>
-    `;
-    
-    todoItem.addEventListener('click', () => {
-      toggleChapterTodo(ch.id, todoItem);
-    });
-    
-    container.appendChild(todoItem);
   });
 }
 
-// Action cocher / décocher To-Do item
-function toggleChapterTodo(chapterId, todoItemElement) {
+function openBookChaptersDrawer(bookId) {
+  const bookChapters = state.bibleChapters.filter(ch => ch.bookId === bookId);
+  if (bookChapters.length === 0) return;
+
+  const bookName = bookChapters[0].book;
+  currentDrawerBookId = bookId;
+
+  document.getElementById('drawer-book-title').textContent = bookName;
+  document.getElementById('chapters-drawer').classList.add('active');
+
+  renderDrawerChaptersGrid(bookId, bookChapters);
+}
+
+function renderDrawerChaptersGrid(bookId, chapters) {
+  const listContainer = document.getElementById('drawer-chapters-list');
+  listContainer.innerHTML = '';
+
+  const todaysPlan = getTodaysReadingPlan();
+  const readChaptersInBook = chapters.filter(ch => state.readChapters.includes(ch.id)).length;
+  document.getElementById('drawer-book-progress').textContent = `${readChaptersInBook} / ${chapters.length} chapitres lus`;
+
+  chapters.forEach(ch => {
+    const isRead = state.readChapters.includes(ch.id);
+    const isHighlighted = todaysPlan.includes(ch.id);
+
+    const btn = document.createElement('button');
+    btn.className = 'chapter-btn';
+    btn.textContent = ch.chapter;
+    btn.setAttribute('aria-label', `Chapitre ${ch.chapter}`);
+
+    if (isRead) btn.classList.add('checked');
+    if (isHighlighted && !isRead) btn.classList.add('highlighted');
+
+    btn.addEventListener('click', () => {
+      toggleChapterState(ch.id, btn);
+      // Mettre à jour les indicateurs du drawer
+      const updatedRead = chapters.filter(c => state.readChapters.includes(c.id)).length;
+      document.getElementById('drawer-book-progress').textContent = `${updatedRead} / ${chapters.length} chapitres lus`;
+    });
+
+    listContainer.appendChild(btn);
+  });
+}
+
+function toggleChapterState(chapterId, btnElement) {
   const index = state.readChapters.indexOf(chapterId);
   const todayKey = formatDateKey(new Date());
-  
+
   if (index === -1) {
     state.readChapters.push(chapterId);
-    todoItemElement.classList.remove('highlighted');
-    todoItemElement.classList.add('checked');
+    btnElement.classList.remove('highlighted');
+    btnElement.classList.add('checked');
     state.historyLog[todayKey] = (state.historyLog[todayKey] || 0) + 1;
   } else {
     state.readChapters.splice(index, 1);
-    todoItemElement.classList.remove('checked');
+    btnElement.classList.remove('checked');
     const todaysPlan = getTodaysReadingPlan();
     if (todaysPlan.includes(chapterId)) {
-      todoItemElement.classList.add('highlighted');
+      btnElement.classList.add('highlighted');
     }
     if (state.historyLog[todayKey] && state.historyLog[todayKey] > 0) {
       state.historyLog[todayKey]--;
     }
   }
 
-  saveReadChaptersToStorage();
-  saveHistoryToStorage();
+  saveActiveProfileState();
+
+  // Actualiser la grille des cubes et de la surbrillance sans fermer le tiroir
+  renderReadingListCubesOnly();
+  renderTodayCubes();
   
-  // Petit rafraîchissement différé pour recalculer l'ordre et la pagination
-  setTimeout(() => {
-    renderReadingList();
-  }, 250);
+  if (state.activeTab === 'dashboard-tab') {
+    updateDashboard();
+  }
+}
+
+// --- RENDU DE LA LISTE DE LECTURE (GRILLE DE CUBES ET LECTURE DU JOUR) ---
+function renderReadingList() {
+  renderTodayCubes();
+  renderReadingListCubesOnly();
+}
+
+function renderTodayCubes() {
+  const section = document.getElementById('today-readings-section');
+  const gridContainer = document.getElementById('today-cubes-list');
+  const progressRatioSpan = document.getElementById('today-progress-ratio');
+
+  gridContainer.innerHTML = '';
+  const todaysPlan = getTodaysReadingPlan();
+
+  if (todaysPlan.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+
+  let readCount = 0;
+
+  todaysPlan.forEach(chapterId => {
+    const ch = state.bibleChapters.find(c => c.id === chapterId);
+    if (!ch) return;
+
+    const isRead = state.readChapters.includes(chapterId);
+    if (isRead) readCount++;
+
+    const cube = document.createElement('div');
+    cube.className = 'today-chapter-cube';
+    if (isRead) cube.classList.add('checked');
+
+    cube.innerHTML = `
+      <span class="book-name">${ch.book}</span>
+      <span class="chapter-num">${ch.chapter}</span>
+      <div class="read-check-icon">
+        <i class="fa-solid fa-check"></i>
+      </div>
+    `;
+
+    // Clic pour cocher/décocher directement le cube du jour
+    cube.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleTodayChapter(chapterId, cube);
+    });
+
+    gridContainer.appendChild(cube);
+  });
+
+  progressRatioSpan.textContent = `${readCount} / ${todaysPlan.length} chapitres`;
+}
+
+function toggleTodayChapter(chapterId, cubeElement) {
+  const index = state.readChapters.indexOf(chapterId);
+  const todayKey = formatDateKey(new Date());
+
+  if (index === -1) {
+    state.readChapters.push(chapterId);
+    cubeElement.classList.add('checked');
+    state.historyLog[todayKey] = (state.historyLog[todayKey] || 0) + 1;
+  } else {
+    state.readChapters.splice(index, 1);
+    cubeElement.classList.remove('checked');
+    if (state.historyLog[todayKey] && state.historyLog[todayKey] > 0) {
+      state.historyLog[todayKey]--;
+    }
+  }
+
+  saveActiveProfileState();
+  renderTodayCubes();
+  renderReadingListCubesOnly();
+
+  // Si le tiroir est actuellement ouvert sur le livre de ce chapitre, on met à jour le tiroir
+  if (currentDrawerBookId) {
+    const ch = state.bibleChapters.find(c => c.id === chapterId);
+    if (ch && ch.bookId === currentDrawerBookId) {
+      const bookChapters = state.bibleChapters.filter(c => c.bookId === currentDrawerBookId);
+      renderDrawerChaptersGrid(currentDrawerBookId, bookChapters);
+    }
+  }
 
   if (state.activeTab === 'dashboard-tab') {
     updateDashboard();
   }
 }
 
-// --- TABLEAU DE BORD & ANALYSE ---
+function renderReadingListCubesOnly() {
+  const container = document.getElementById('books-list-container');
+  const paginationContainer = document.getElementById('pagination-container');
+  const searchQuery = document.getElementById('book-search-input').value.toLowerCase().trim();
+  const activeFilter = document.querySelector('.filter-btn.active').getAttribute('data-filter');
+
+  container.innerHTML = '';
+  paginationContainer.innerHTML = '';
+
+  const todaysPlan = getTodaysReadingPlan();
+
+  // 1. Grouper les chapitres par livre pour filtrer et afficher les livres en tant que cubes
+  const booksMap = {};
+  state.bibleChapters.forEach(ch => {
+    if (!booksMap[ch.bookId]) {
+      booksMap[ch.bookId] = {
+        id: ch.bookId,
+        name: ch.book,
+        testament: ch.testament,
+        chapters: []
+      };
+    }
+    booksMap[ch.bookId].chapters.push(ch);
+  });
+
+  const allBooks = Object.values(booksMap);
+
+  // 2. Filtrer les livres
+  const filteredBooks = allBooks.filter(book => {
+    const matchesSearch = book.name.toLowerCase().includes(searchQuery);
+    if (!matchesSearch) return false;
+
+    const readCount = book.chapters.filter(ch => state.readChapters.includes(ch.id)).length;
+    const isCompleted = readCount === book.chapters.length;
+
+    if (activeFilter === 'read') return isCompleted;
+    if (activeFilter === 'unread') return !isCompleted;
+    if (activeFilter === 'today') {
+      return book.chapters.some(ch => todaysPlan.includes(ch.id));
+    }
+    return true;
+  });
+
+  if (filteredBooks.length === 0) {
+    container.innerHTML = `
+      <div class="card empty-state" style="grid-column: 1 / -1; width: 100%;">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <h3>Aucun livre trouvé</h3>
+        <p>Ajustez vos filtres ou la barre de recherche.</p>
+      </div>
+    `;
+    return;
+  }
+
+  // 3. Paginer les livres (sauf filtre "Aujourd'hui")
+  let displayBooks = filteredBooks;
+  const isFilterToday = activeFilter === 'today';
+
+  if (!isFilterToday) {
+    const totalItems = filteredBooks.length;
+    const totalPages = Math.ceil(totalItems / state.itemsPerPage);
+
+    if (state.currentPage > totalPages) {
+      state.currentPage = 1;
+    }
+
+    const startIndex = (state.currentPage - 1) * state.itemsPerPage;
+    const endIndex = startIndex + state.itemsPerPage;
+    displayBooks = filteredBooks.slice(startIndex, endIndex);
+
+    if (totalPages > 1) {
+      paginationContainer.innerHTML = `
+        <button class="pagination-btn" id="prev-page-btn" ${state.currentPage === 1 ? 'disabled' : ''}>
+          <i class="fa-solid fa-chevron-left"></i>
+        </button>
+        <span class="pagination-info">Page ${state.currentPage} sur ${totalPages} (${totalItems} livres)</span>
+        <button class="pagination-btn" id="next-page-btn" ${state.currentPage === totalPages ? 'disabled' : ''}>
+          <i class="fa-solid fa-chevron-right"></i>
+        </button>
+      `;
+
+      document.getElementById('prev-page-btn').addEventListener('click', () => {
+        state.currentPage--;
+        renderReadingListCubesOnly();
+        container.scrollIntoView({ behavior: 'smooth' });
+      });
+
+      document.getElementById('next-page-btn').addEventListener('click', () => {
+        state.currentPage++;
+        renderReadingListCubesOnly();
+        container.scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+  }
+
+  // 4. Rendre les cubes de livres
+  displayBooks.forEach(book => {
+    const readCount = book.chapters.filter(ch => state.readChapters.includes(ch.id)).length;
+    const isCompleted = readCount === book.chapters.length;
+    const hasToday = book.chapters.some(ch => todaysPlan.includes(ch.id));
+
+    const cube = document.createElement('div');
+    cube.className = 'book-cube';
+    
+    if (isCompleted) cube.classList.add('completed');
+    if (hasToday) cube.classList.add('has-highlighted');
+
+    const iconClass = BOOK_ICONS[book.id] || 'fa-book';
+
+    cube.innerHTML = `
+      <div class="book-cube-icon-wrapper">
+        <i class="fa-solid ${iconClass}"></i>
+      </div>
+      <span class="book-cube-name">${book.name}</span>
+      <span class="book-cube-progress">${readCount} / ${book.chapters.length}</span>
+    `;
+
+    // Ouvrir le tiroir des chapitres au clic
+    cube.addEventListener('click', () => {
+      openBookChaptersDrawer(book.id);
+    });
+
+    container.appendChild(cube);
+  });
+}
+
+// --- TABLEAU DE BORD (COMPACT & COMPARATIF MEMBRES) ---
 function updateDashboard() {
   if (state.bibleChapters.length === 0) return;
+
+  // Enregistrer l'état du profil actif d'abord pour avoir des données à jour
+  saveActiveProfileState();
 
   const totalChapters = state.bibleChapters.length;
   const readCount = state.readChapters.length;
@@ -554,7 +953,55 @@ function updateDashboard() {
   document.getElementById('nt-chapters-data').textContent = `${ntReadChapters} / ${ntTotalChapters}`;
   document.getElementById('nt-books-remaining').textContent = `${totalNTBooks - completedNT} livres restants`;
 
+  // Mettre à jour le tableau comparatif des membres (Compagnons)
+  renderCompanionsList();
+
   renderOrUpdateChart();
+}
+
+function renderCompanionsList() {
+  const container = document.getElementById('companions-list-container');
+  container.innerHTML = '';
+
+  const totalChapters = state.bibleChapters.length;
+  if (totalChapters === 0) return;
+
+  state.profiles.forEach(p => {
+    // Calculer le pourcentage de progression pour ce profil
+    const count = p.readChapters ? p.readChapters.length : 0;
+    const pct = Math.round((count / totalChapters) * 100);
+
+    const card = document.createElement('div');
+    card.className = 'companion-card';
+    if (p.id === state.currentProfileId) {
+      card.style.borderColor = 'var(--color-primary)';
+      card.style.background = 'rgba(99, 102, 241, 0.05)';
+    }
+
+    card.innerHTML = `
+      <div class="companion-avatar" style="background-color: ${p.avatarColor}">
+        ${p.username.charAt(0)}
+      </div>
+      <div class="companion-info">
+        <div class="companion-name">
+          ${p.username} ${p.id === state.currentProfileId ? '<span style="font-size:0.75rem; color:var(--color-primary); font-weight:600;">(Vous)</span>' : ''}
+        </div>
+        <div class="companion-progress">
+          ${count} / ${totalChapters} chapitres (${pct}%)
+        </div>
+        <div class="companion-progress-bar">
+          <div class="companion-progress-fill" style="width: ${pct}%; background-color: ${p.avatarColor};"></div>
+        </div>
+      </div>
+    `;
+
+    // Clic pour basculer sur ce profil directement depuis la liste
+    card.addEventListener('click', () => {
+      switchProfile(p.id);
+    });
+
+    container.appendChild(card);
+  });
 }
 
 // --- LOGIQUE DES GRAPHIQUES (CHART.JS) ---
@@ -712,7 +1159,7 @@ function initNotesControls() {
       state.currentNoteId = newNote.id;
     }
 
-    saveNotesToStorage();
+    saveActiveProfileState();
     renderNotesList();
     displayNoteInForm(state.currentNoteId);
     
@@ -727,7 +1174,7 @@ function initNotesControls() {
     
     if (confirm("Êtes-vous sûr de vouloir supprimer cette note ?")) {
       state.notes = state.notes.filter(n => n.id !== state.currentNoteId);
-      saveNotesToStorage();
+      saveActiveProfileState();
       renderNotesList();
       resetNoteForm();
     }
