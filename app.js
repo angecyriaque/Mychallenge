@@ -113,13 +113,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   initTabNavigation();
   initGoalControls();
   initProfilesUI();
-  
-  populateBookSelect();
-  renderReadingList();
-  renderNotesList();
-  updateDashboard();
   initNotesControls();
   initDrawerControls();
+  
+  // Vérifier si on doit afficher la modale obligatoire (bienvenue)
+  checkWelcomeProfileState();
+
+  if (state.currentProfileId) {
+    populateBookSelect();
+    renderReadingList();
+    renderNotesList();
+    updateDashboard();
+  }
   
   // Ecouteurs sur les filtres de la liste de lecture
   document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -211,53 +216,34 @@ function loadLocalStorage() {
   const savedProfiles = localStorage.getItem('bible_tracker_profiles');
   const savedCurrentProfileId = localStorage.getItem('bible_tracker_current_profile_id');
   
+  // Détecter et nettoyer l'ancien état de test s'il existe
+  if (savedProfiles && (savedProfiles.includes("prof-1") || savedProfiles.includes("prof-2"))) {
+    localStorage.removeItem('bible_tracker_profiles');
+    localStorage.removeItem('bible_tracker_current_profile_id');
+    localStorage.removeItem('bible_tracker_read_chapters');
+    localStorage.removeItem('bible_tracker_history');
+    window.location.reload();
+    return;
+  }
+  
   if (savedProfiles) {
     state.profiles = JSON.parse(savedProfiles);
   } else {
-    // Initialiser les profils d'exemple
-    state.profiles = [
-      {
-        id: 'prof-1',
-        username: 'David',
-        avatarColor: '#6366f1',
-        readChapters: ['genese-1', 'genese-2', 'genese-3', 'jean-1'],
-        dailyGoal: 3,
-        notes: [
-          {
-            id: 'note-sample-1',
-            title: 'La Création - Jour 1',
-            bookId: 'genese',
-            content: 'Genèse 1 montre la grandeur de Dieu. Sa voix ordonne le chaos. Lumière et ténèbres sont séparées par simple commandement.',
-            date: getFormattedDate(new Date(Date.now() - 24*60*60*1000))
-          }
-        ],
-        historyLog: {},
-        todaysPlan: ['genese-4', 'genese-5', 'genese-6'],
-        todaysPlanDate: formatDateKey(new Date())
-      },
-      {
-        id: 'prof-2',
-        username: 'Noémie',
-        avatarColor: '#10b981',
-        readChapters: ['jean-1', 'jean-2', 'jean-3'],
-        dailyGoal: 2,
-        notes: [],
-        historyLog: {},
-        todaysPlan: ['jean-4', 'jean-5'],
-        todaysPlanDate: formatDateKey(new Date())
-      }
-    ];
-    saveProfilesToStorage();
+    state.profiles = [];
   }
 
-  if (savedCurrentProfileId && state.profiles.some(p => p.id === savedCurrentProfileId)) {
-    state.currentProfileId = savedCurrentProfileId;
+  if (state.profiles.length === 0) {
+    state.currentProfileId = null;
+    localStorage.removeItem('bible_tracker_current_profile_id');
   } else {
-    state.currentProfileId = state.profiles[0].id;
-    localStorage.setItem('bible_tracker_current_profile_id', state.currentProfileId);
+    if (savedCurrentProfileId && state.profiles.some(p => p.id === savedCurrentProfileId)) {
+      state.currentProfileId = savedCurrentProfileId;
+    } else {
+      state.currentProfileId = state.profiles[0].id;
+      localStorage.setItem('bible_tracker_current_profile_id', state.currentProfileId);
+    }
+    loadActiveProfileState();
   }
-
-  loadActiveProfileState();
 }
 
 function loadActiveProfileState() {
@@ -322,8 +308,10 @@ function initProfilesUI() {
   // Toggle Dropdown
   activeProfileBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    dropdownList.classList.toggle('active');
-    populateProfileDropdown();
+    if (state.profiles.length > 0) {
+      dropdownList.classList.toggle('active');
+      populateProfileDropdown();
+    }
   });
 
   // Fermer le dropdown en cliquant à côté
@@ -331,9 +319,18 @@ function initProfilesUI() {
     dropdownList.classList.remove('active');
   });
 
-  // Fermer la modale
+  // Fermer la modale (uniquement si des profils existent)
   cancelModalBtn.addEventListener('click', () => {
-    profileModal.classList.remove('active');
+    if (state.profiles.length > 0) {
+      profileModal.classList.remove('active');
+    }
+  });
+
+  // Empêcher la fermeture en cliquant à côté en mode Bienvenue
+  profileModal.addEventListener('click', (e) => {
+    if (e.target === profileModal && state.profiles.length > 0) {
+      profileModal.classList.remove('active');
+    }
   });
 
   // Sauvegarder le nouveau profil
@@ -344,13 +341,23 @@ function initProfilesUI() {
       return;
     }
 
+    const isFirstProfile = state.profiles.length === 0;
+
     const newProfile = {
       id: 'prof-' + Date.now(),
       username: username,
       avatarColor: selectedColor,
       readChapters: [],
       dailyGoal: 3,
-      notes: [],
+      notes: isFirstProfile ? [
+        {
+          id: 'note-welcome',
+          title: 'Bienvenue dans votre journal !',
+          bookId: '',
+          content: 'Ceci est votre espace de notes personnel. Vous pouvez y inscrire vos réflexions de lecture quotidiennes, vos versets préférés ou vos prières. Bon voyage à travers les Écritures !',
+          date: getFormattedDate(new Date())
+        }
+      ] : [],
       historyLog: {},
       todaysPlan: [],
       todaysPlanDate: ''
@@ -359,9 +366,14 @@ function initProfilesUI() {
     state.profiles.push(newProfile);
     saveProfilesToStorage();
     
-    // Switch sur ce nouveau profil
+    // Fermer la modale
     profileModal.classList.remove('active');
     newProfileUsername.value = '';
+    
+    // Mettre à jour l'état du bouton d'annulation de la modale
+    checkWelcomeProfileState();
+    
+    // Switch sur ce nouveau profil
     switchProfile(newProfile.id);
   });
 }
@@ -495,6 +507,7 @@ function initGoalControls() {
 
 // --- POPULER LES LIVRES DANS LE JOURNAL ---
 function populateBookSelect() {
+  if (!state.currentProfileId) return;
   const select = document.getElementById('note-book-select');
   select.innerHTML = '<option value="">Général / Aucun</option>';
   
@@ -648,6 +661,7 @@ function toggleChapterState(chapterId, btnElement) {
 
 // --- RENDU DE LA LISTE DE LECTURE (GRILLE DE CUBES ET LECTURE DU JOUR) ---
 function renderReadingList() {
+  if (!state.currentProfileId) return;
   renderTodayCubes();
   renderReadingListCubesOnly();
 }
@@ -834,21 +848,29 @@ function renderReadingListCubesOnly() {
     const readCount = book.chapters.filter(ch => state.readChapters.includes(ch.id)).length;
     const isCompleted = readCount === book.chapters.length;
     const hasToday = book.chapters.some(ch => todaysPlan.includes(ch.id));
+    const theme = getBookTheme(book.id);
 
     const cube = document.createElement('div');
     cube.className = 'book-cube';
+    cube.style.borderColor = theme.border;
     
-    if (isCompleted) cube.classList.add('completed');
-    if (hasToday) cube.classList.add('has-highlighted');
+    if (isCompleted) {
+      cube.classList.add('completed');
+      cube.style.background = 'rgba(16, 185, 129, 0.02)';
+      cube.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+    } else if (hasToday) {
+      cube.classList.add('has-highlighted');
+      cube.style.borderColor = 'var(--border-highlight)';
+    }
 
     const iconClass = BOOK_ICONS[book.id] || 'fa-book';
 
     cube.innerHTML = `
-      <div class="book-cube-icon-wrapper">
+      <div class="book-cube-icon-wrapper" style="background-color: ${theme.bg}; color: ${theme.color}; border-color: ${theme.border}">
         <i class="fa-solid ${iconClass}"></i>
       </div>
-      <span class="book-cube-name">${book.name}</span>
-      <span class="book-cube-progress">${readCount} / ${book.chapters.length}</span>
+      <span class="book-cube-name" style="${hasToday ? 'color: var(--color-accent);' : ''}">${book.name}</span>
+      <span class="book-cube-progress" style="color: ${theme.color}">${readCount} / ${book.chapters.length}</span>
     `;
 
     // Ouvrir le tiroir des chapitres au clic
@@ -862,6 +884,7 @@ function renderReadingListCubesOnly() {
 
 // --- TABLEAU DE BORD (COMPACT & COMPARATIF MEMBRES) ---
 function updateDashboard() {
+  if (!state.currentProfileId) return;
   if (state.bibleChapters.length === 0) return;
 
   // Enregistrer l'état du profil actif d'abord pour avoir des données à jour
@@ -1198,6 +1221,7 @@ function initNotesControls() {
 }
 
 function renderNotesList() {
+  if (!state.currentProfileId) return;
   const listContainer = document.getElementById('notes-list-items');
   const searchQuery = document.getElementById('notes-search-input').value.toLowerCase().trim();
   
@@ -1299,4 +1323,51 @@ function getFormattedDate(date) {
   const monthName = months[date.getMonth()];
   const year = date.getFullYear();
   return `${day} ${monthName} ${year}`;
+}
+
+function getBookTheme(bookId) {
+  const PENTATEUCH = ["genese", "exode", "levitique", "nombres", "deuteronome"];
+  const HISTORICAL = ["josue", "juges", "ruth", "1samuel", "2samuel", "1rois", "2rois", "1chroniques", "2chroniques", "esdras", "nehemie", "esther"];
+  const POETRY = ["job", "psaumes", "proverbes", "ecclesiaste", "cantique"];
+  const MAJOR_PROPHETS = ["esaie", "jeremie", "lamentations", "ezechiel", "daniel"];
+  const GOSPELS = ["matthieu", "marc", "luc", "jean", "actes"];
+  const MINOR_PROPHETS = ["osee", "joel", "amos", "abdias", "jonas", "michee", "nahum", "habacuc", "sophonie", "aggee", "zacharie", "malachie"];
+
+  if (PENTATEUCH.includes(bookId)) {
+    return { color: '#10b981', border: 'rgba(16, 185, 129, 0.25)', bg: 'rgba(16, 185, 129, 0.1)' }; // Green
+  }
+  if (HISTORICAL.includes(bookId)) {
+    return { color: '#f59e0b', border: 'rgba(245, 158, 11, 0.25)', bg: 'rgba(245, 158, 11, 0.1)' }; // Amber
+  }
+  if (POETRY.includes(bookId)) {
+    return { color: '#ec4899', border: 'rgba(236, 72, 153, 0.25)', bg: 'rgba(236, 72, 153, 0.1)' }; // Rose
+  }
+  if (MAJOR_PROPHETS.includes(bookId)) {
+    return { color: '#06b6d4', border: 'rgba(6, 182, 212, 0.25)', bg: 'rgba(6, 182, 212, 0.1)' }; // Cyan
+  }
+  if (MINOR_PROPHETS.includes(bookId)) {
+    return { color: '#f97316', border: 'rgba(249, 115, 22, 0.25)', bg: 'rgba(249, 115, 22, 0.1)' }; // Orange
+  }
+  if (GOSPELS.includes(bookId)) {
+    return { color: '#6366f1', border: 'rgba(99, 102, 241, 0.25)', bg: 'rgba(99, 102, 241, 0.1)' }; // Indigo
+  }
+  if (bookId === "apocalypse") {
+    return { color: '#ef4444', border: 'rgba(239, 68, 68, 0.25)', bg: 'rgba(239, 68, 68, 0.1)' }; // Red
+  }
+  return { color: '#14b8a6', border: 'rgba(20, 184, 166, 0.25)', bg: 'rgba(20, 184, 166, 0.1)' }; // Teal
+}
+
+function checkWelcomeProfileState() {
+  const profileModal = document.getElementById('profile-modal');
+  const cancelModalBtn = document.getElementById('close-profile-modal-btn');
+  const modalTitle = document.querySelector('#profile-modal .card-title');
+
+  if (state.profiles.length === 0) {
+    cancelModalBtn.style.display = 'none';
+    modalTitle.innerHTML = '<i class="fa-solid fa-user-astronaut"></i> Créez votre premier Profil';
+    profileModal.classList.add('active');
+  } else {
+    cancelModalBtn.style.display = 'inline-flex';
+    modalTitle.innerHTML = '<i class="fa-solid fa-user-plus" style="color: var(--color-primary)"></i> Nouveau Profil';
+  }
 }
