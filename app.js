@@ -200,7 +200,7 @@ function getTestamentByBookName(bookName) {
 }
 
 function slugify(text) {
-  return text.toString().toLowerCase().trim()
+  let slug = text.toString().toLowerCase().trim()
     .replace(/\s+/g, '')
     .replace(/[éèêë]/g, 'e')
     .replace(/[àâä]/g, 'a')
@@ -209,6 +209,10 @@ function slugify(text) {
     .replace(/[ûü]/g, 'u')
     .replace(/[ç]/g, 'c')
     .replace(/[^a-z0-9]/g, '');
+  if (slug === 'cantiquedescantiques') {
+    return 'cantique';
+  }
+  return slug;
 }
 
 // --- GESTION DES PROFILS (MULTI-UTILISATEURS) ---
@@ -422,10 +426,16 @@ function switchProfile(profileId) {
   localStorage.setItem('bible_tracker_current_profile_id', profileId);
   loadActiveProfileState();
 
+  populateBookSelect();
   updateDashboard();
   renderReadingList();
   renderNotesList();
-  resetNoteForm();
+  
+  if (state.notes.length > 0) {
+    displayNoteInForm(state.notes[0].id);
+  } else {
+    resetNoteForm();
+  }
 }
 
 // --- THÈME CLAIR/SOMBRE ---
@@ -483,6 +493,7 @@ function initGoalControls() {
   const plusBtn = document.getElementById('goal-plus-btn');
 
   const updateGoal = (newVal) => {
+    if (!state.currentProfileId) return;
     if (newVal < 1) newVal = 1;
     if (newVal > 150) newVal = 150;
     state.dailyGoal = newVal;
@@ -628,6 +639,7 @@ function renderDrawerChaptersGrid(bookId, chapters) {
 }
 
 function toggleChapterState(chapterId, btnElement) {
+  if (!state.currentProfileId) return;
   const index = state.readChapters.indexOf(chapterId);
   const todayKey = formatDateKey(new Date());
 
@@ -715,6 +727,7 @@ function renderTodayCubes() {
 }
 
 function toggleTodayChapter(chapterId, cubeElement) {
+  if (!state.currentProfileId) return;
   const index = state.readChapters.indexOf(chapterId);
   const todayKey = formatDateKey(new Date());
 
@@ -1149,10 +1162,12 @@ function initNotesControls() {
   const searchInput = document.getElementById('notes-search-input');
 
   newNoteBtn.addEventListener('click', () => {
+    if (!state.currentProfileId) return;
     resetNoteForm();
   });
 
   saveNoteBtn.addEventListener('click', () => {
+    if (!state.currentProfileId) return;
     const title = document.getElementById('note-title-input').value.trim();
     const bookId = document.getElementById('note-book-select').value;
     const content = document.getElementById('note-content-textarea').value.trim();
@@ -1193,6 +1208,7 @@ function initNotesControls() {
   });
 
   deleteNoteBtn.addEventListener('click', () => {
+    if (!state.currentProfileId) return;
     if (!state.currentNoteId) return;
     
     if (confirm("Êtes-vous sûr de vouloir supprimer cette note ?")) {
@@ -1204,6 +1220,7 @@ function initNotesControls() {
   });
 
   cancelNoteBtn.addEventListener('click', () => {
+    if (!state.currentProfileId) return;
     if (state.currentNoteId) {
       displayNoteInForm(state.currentNoteId);
     } else {
